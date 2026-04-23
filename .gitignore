@@ -1,0 +1,27 @@
+.DS_Store
+.claude/
+
+# dependencies
+node_modules/
+
+# python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# logs
+*.log
+
+# env files (keep examples)
+.env
+.env.*
+!.env.example
+
+# Next.js
+.next/
+out/
+
