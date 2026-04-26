@@ -55,6 +55,7 @@ create table if not exists enrichment_results (
   -- FRED economic indicators
   state_unemployment_rate  numeric(5, 2),
   rental_vacancy_rate      numeric(5, 2),
+  housing_price_index      numeric(10, 2),
 
   -- NewsAPI
   news_sentiment           text check (news_sentiment in ('positive', 'neutral', 'negative')),
@@ -95,6 +96,19 @@ create table if not exists outreach (
 );
 
 -- ============================================================
+-- ENRICHMENT_RAW — full API responses, one row per lead
+-- ============================================================
+create table if not exists enrichment_raw (
+  id           uuid primary key default gen_random_uuid(),
+  lead_id      uuid not null unique references leads(id) on delete cascade,
+  census       jsonb,
+  fred         jsonb,
+  walkscore    jsonb,
+  news         jsonb,
+  enriched_at  timestamptz not null default now()
+);
+
+-- ============================================================
 -- Helpful view: fully joined lead data for a given project
 -- Usage: select * from enriched_leads where project_id = '...';
 -- ============================================================
@@ -128,6 +142,7 @@ create or replace view enriched_leads as
     er.bike_score,
     er.state_unemployment_rate,
     er.rental_vacancy_rate,
+    er.housing_price_index,
     er.news_sentiment,
     er.news_articles,
     er.enrichment_errors,

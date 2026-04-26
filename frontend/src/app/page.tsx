@@ -1,22 +1,27 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import Header from "@/components/Header";
 import LeadUploader from "@/components/LeadUploader";
 import LeadTable from "@/components/LeadTable";
 import ProjectSidebar from "@/components/ProjectSidebar";
-import { getProjectLeads } from "@/lib/api";
-import type { ParseLeadsResponse, Project, StoredLead } from "@/lib/types";
+import { enrichLeads } from "@/lib/api";
+import { saveAIInsights } from "@/lib/ai-cache";
+import type { ParseLeadsResponse, StoredLead } from "@/lib/types";
 
-type Step = "upload" | "preview" | "enriching" | "results";
+type Step = "upload" | "preview" | "enriching";
 
 export default function Home() {
+  const router = useRouter();
   const [step, setStep] = useState<Step>("upload");
   const [projectId, setProjectId] = useState<string | null>(null);
   const [parsedLeads, setParsedLeads] = useState<StoredLead[]>([]);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
+  const [enrichError, setEnrichError] = useState<string | null>(null);
   const [sidebarRefresh, setSidebarRefresh] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   function handleParseSuccess(response: ParseLeadsResponse) {
     setProjectId(response.project_id);
@@ -30,38 +35,37 @@ export default function Home() {
     setProjectId(null);
     setParsedLeads([]);
     setParseErrors([]);
+    setEnrichError(null);
     setStep("upload");
   }
 
-  async function handleSelectProject(project: Project) {
+  async function handleEnrich() {
+    if (!projectId) return;
+    setEnrichError(null);
+    setStep("enriching");
     try {
-      const leads = await getProjectLeads(project.id);
-      setProjectId(project.id);
-      setParsedLeads(leads);
-      setParseErrors([]);
-      const stepMap: Record<Project["status"], Step> = {
-        pending: "preview",
-        enriching: "enriching",
-        complete: "preview",
-        failed: "preview",
-      };
-      setStep(stepMap[project.status] ?? "preview");
-    } catch {
-      // silently ignore — user stays on current step
+      const result = await enrichLeads(projectId, parsedLeads);
+      saveAIInsights(result.leads);
+      sessionStorage.setItem("enriched_leads", JSON.stringify(result.leads));
+      router.push(`/projects/${projectId}`);
+    } catch (err) {
+      setEnrichError(err instanceof Error ? err.message : "Enrichment failed.");
+      setStep("preview");
     }
   }
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header />
+      <Header onMenuToggle={() => setSidebarOpen((v) => !v)} />
 
       <div className="flex flex-1 overflow-hidden">
         <ProjectSidebar
           activeProjectId={projectId}
           refreshTrigger={sidebarRefresh}
-          onSelect={handleSelectProject}
           onNew={handleBack}
           onDelete={(id) => { if (id === projectId) handleBack(); }}
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
         />
 
         <main className="flex-1 overflow-y-auto px-6 py-10">
@@ -84,7 +88,8 @@ export default function Home() {
             <LeadTable
               leads={parsedLeads}
               errors={parseErrors}
-              onEnrich={() => setStep("enriching")}
+              enrichError={enrichError}
+              onEnrich={handleEnrich}
               onBack={handleBack}
             />
           )}
@@ -95,17 +100,13 @@ export default function Home() {
                 <Loader2 className="w-6 h-6 text-primary animate-spin" />
               </div>
               <div className="text-center">
-                <p className="text-sm font-semibold text-foreground">Enrichment coming in Phase 3</p>
+                <p className="text-sm font-semibold text-foreground">
+                  Enriching {parsedLeads.length} lead{parsedLeads.length !== 1 ? "s" : ""}…
+                </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {parsedLeads.length} leads saved · project {projectId?.slice(0, 8)}…
+                  Calling Census, WalkScore, FRED, NewsAPI, and Claude AI — this takes ~20s
                 </p>
               </div>
-              <button
-                onClick={() => setStep("preview")}
-                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 transition-colors"
-              >
-                ← Back to preview
-              </button>
             </div>
           )}
 

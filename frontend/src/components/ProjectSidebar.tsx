@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Check, FileUp, AlignLeft, UserRound, Pencil, Plus, Trash2, X } from "lucide-react";
 import { deleteProject, getProjects, renameProject } from "@/lib/api";
 import type { Project } from "@/lib/types";
@@ -23,12 +24,14 @@ function formatDate(iso: string) {
 interface Props {
   activeProjectId: string | null;
   refreshTrigger: number;
-  onSelect: (project: Project) => void;
   onNew: () => void;
   onDelete: (projectId: string) => void;
+  open?: boolean;
+  onClose?: () => void;
 }
 
-export default function ProjectSidebar({ activeProjectId, refreshTrigger, onSelect, onNew, onDelete }: Props) {
+export default function ProjectSidebar({ activeProjectId, refreshTrigger, onNew, onDelete, open = true, onClose }: Props) {
+  const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -74,8 +77,27 @@ export default function ProjectSidebar({ activeProjectId, refreshTrigger, onSele
     setDeletingId(null);
   }
 
+  function handleProjectClick(p: Project) {
+    router.push(`/projects/${p.id}`);
+    onClose?.();
+  }
+
   return (
-    <aside className="w-60 shrink-0 border-r border-border bg-card flex flex-col">
+    <>
+      {/* Mobile backdrop — sits below the header */}
+      {open && (
+        <div
+          className="fixed top-14 inset-x-0 bottom-0 bg-black/30 z-20 lg:hidden"
+          onClick={onClose}
+        />
+      )}
+
+      <aside className={`
+        fixed top-14 bottom-0 left-0 z-30 flex flex-col w-60 shrink-0 border-r border-border bg-card
+        transition-transform duration-200 ease-in-out
+        lg:relative lg:top-auto lg:bottom-auto lg:translate-x-0 lg:z-auto
+        ${open ? "translate-x-0" : "-translate-x-full"}
+      `}>
       <div className="px-3 py-3 border-b border-border flex items-center justify-between gap-2">
         <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
           Projects
@@ -104,7 +126,7 @@ export default function ProjectSidebar({ activeProjectId, refreshTrigger, onSele
           return (
             <div
               key={p.id}
-              onClick={() => !isEditing && onSelect(p)}
+              onClick={() => !isEditing && handleProjectClick(p)}
               className={`group mx-2 rounded-lg px-3 py-2.5 transition-colors ${
                 isActive ? "bg-primary/15" : "hover:bg-muted/40 cursor-pointer"
               }`}
@@ -185,5 +207,6 @@ export default function ProjectSidebar({ activeProjectId, refreshTrigger, onSele
         })}
       </div>
     </aside>
+    </>
   );
 }

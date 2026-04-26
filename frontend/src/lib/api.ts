@@ -1,4 +1,5 @@
-import type { ParseLeadsResponse, Project, RawLead, StoredLead } from "./types";
+import type { EnrichLeadsResponse, ParseLeadsResponse, Project, RawEnrichmentData, RawLead, StoredLead } from "./types";
+
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
@@ -32,6 +33,11 @@ export async function getProjects(): Promise<Project[]> {
   const res = await fetch(`${API_URL}/api/projects`);
   const data = await handleResponse<{ projects: Project[] }>(res);
   return data.projects;
+}
+
+export async function getProject(id: string): Promise<Project> {
+  const res = await fetch(`${API_URL}/api/projects/${id}/detail`);
+  return handleResponse(res);
 }
 
 export async function deleteProject(id: string): Promise<void> {
@@ -77,6 +83,32 @@ export async function parseLeadsSingle(lead: RawLead): Promise<ParseLeadsRespons
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(lead),
+  });
+  return handleResponse(res);
+}
+
+// ---------------------------------------------------------------------------
+// Enrichment (Phase 3)
+// ---------------------------------------------------------------------------
+
+export async function getRawEnrichment(leadId: string): Promise<RawEnrichmentData> {
+  const res = await fetch(`${API_URL}/api/leads/${leadId}/raw-enrichment`);
+  return handleResponse(res);
+}
+
+export async function getEnrichedLeads(projectId: string): Promise<EnrichLeadsResponse> {
+  const res = await fetch(`${API_URL}/api/projects/${projectId}/enriched-leads`);
+  return handleResponse(res);
+}
+
+export async function enrichLeads(
+  projectId: string,
+  leads?: StoredLead[],
+): Promise<EnrichLeadsResponse> {
+  const res = await fetch(`${API_URL}/api/projects/${projectId}/enrich`, {
+    method: "POST",
+    headers: leads ? { "Content-Type": "application/json" } : {},
+    body: leads ? JSON.stringify({ leads }) : undefined,
   });
   return handleResponse(res);
 }

@@ -1,20 +1,43 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, ChevronLeft, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronDown, ChevronUp, AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import type { StoredLead } from "@/lib/types";
+import type { EnrichedLead, StoredLead } from "@/lib/types";
 
 interface LeadTableProps {
   leads: StoredLead[];
   errors: string[];
+  enrichError?: string | null;
+  enrichedLeads?: EnrichedLead[];
+  mode?: "preview" | "results";
   onEnrich: () => void;
   onBack: () => void;
+  onRowClick?: (lead: EnrichedLead) => void;
 }
 
-export default function LeadTable({ leads, errors, onEnrich, onBack }: LeadTableProps) {
+const TIER_STYLES: Record<string, string> = {
+  HOT: "text-red-600 bg-red-50 border border-red-200",
+  WARM: "text-amber-700 bg-amber-50 border border-amber-200",
+  NURTURE: "text-blue-600 bg-blue-50 border border-blue-200",
+  NOT_QUALIFIED: "text-muted-foreground bg-muted border border-border",
+};
+
+export default function LeadTable({
+  leads,
+  errors,
+  enrichError,
+  enrichedLeads,
+  mode = "preview",
+  onEnrich,
+  onBack,
+  onRowClick,
+}: LeadTableProps) {
   const [errorsExpanded, setErrorsExpanded] = useState(false);
+
+  const isResults = mode === "results" && enrichedLeads && enrichedLeads.length > 0;
+  const enrichedMap = new Map(enrichedLeads?.map((l) => [l.id, l]) ?? []);
 
   return (
     <div className="w-full max-w-6xl mx-auto space-y-4">
@@ -22,8 +45,20 @@ export default function LeadTable({ leads, errors, onEnrich, onBack }: LeadTable
       {/* Summary bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-base font-semibold text-foreground">Lead Preview</h2>
-          <Badge variant="default">{leads.length} leads ready</Badge>
+          <h2 className="text-base font-semibold text-foreground">
+            {isResults ? "Enrichment Results" : "Lead Preview"}
+          </h2>
+          <Badge variant="default">{leads.length} leads</Badge>
+          {isResults && (
+            <>
+              <Badge className="text-red-600 bg-red-50 border border-red-200">
+                {enrichedLeads!.filter((l) => l.score.tier === "HOT").length} HOT
+              </Badge>
+              <Badge className="text-amber-700 bg-amber-50 border border-amber-200">
+                {enrichedLeads!.filter((l) => l.score.tier === "WARM").length} WARM
+              </Badge>
+            </>
+          )}
           {errors.length > 0 && (
             <Badge variant="destructive">{errors.length} skipped</Badge>
           )}
@@ -33,7 +68,7 @@ export default function LeadTable({ leads, errors, onEnrich, onBack }: LeadTable
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           <ChevronLeft className="w-3.5 h-3.5" />
-          Upload different file
+          {isResults ? "Start over" : "Upload different file"}
         </button>
       </div>
 
@@ -48,9 +83,7 @@ export default function LeadTable({ leads, errors, onEnrich, onBack }: LeadTable
               <AlertTriangle className="w-3.5 h-3.5" />
               {errors.length} row{errors.length !== 1 ? "s" : ""} skipped due to missing required fields
             </span>
-            {errorsExpanded
-              ? <ChevronUp className="w-3.5 h-3.5" />
-              : <ChevronDown className="w-3.5 h-3.5" />}
+            {errorsExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
           {errorsExpanded && (
             <ul className="px-4 pb-3 space-y-1">
@@ -62,40 +95,79 @@ export default function LeadTable({ leads, errors, onEnrich, onBack }: LeadTable
         </div>
       )}
 
+      {/* Enrich error */}
+      {enrichError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5">
+          <p className="text-xs font-medium text-red-700 flex items-center gap-2">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            Enrichment failed: {enrichError}
+          </p>
+        </div>
+      )}
+
       {/* Table */}
       <div className="rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50">
+                {isResults && (
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Score</th>
+                )}
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Name</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Email</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Company</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden md:table-cell">Property Address</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">City</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">State</th>
+                {isResults && (
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden lg:table-cell">Walk</th>
+                )}
               </tr>
             </thead>
             <tbody>
-              {leads.map((lead) => (
-                <tr
-                  key={lead.id}
-                  className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors"
-                >
-                  <td className="px-4 py-3 font-medium text-foreground whitespace-nowrap">{lead.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    <span className="truncate max-w-[180px] block">{lead.email}</span>
-                  </td>
-                  <td className="px-4 py-3 text-foreground">
-                    <span className="truncate max-w-[160px] block">{lead.company}</span>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
-                    <span className="truncate max-w-[160px] block">{lead.property_address}</span>
-                  </td>
-                  <td className="px-4 py-3 text-foreground whitespace-nowrap">{lead.city}</td>
-                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{lead.state}</td>
-                </tr>
-              ))}
+              {leads.map((lead) => {
+                const enriched = enrichedMap.get(lead.id);
+                return (
+                  <tr
+                    key={lead.id}
+                    onClick={() => enriched && onRowClick?.(enriched)}
+                    className={`border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors ${enriched && onRowClick ? "cursor-pointer" : ""}`}
+                  >
+                    {isResults && enriched && (
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-foreground w-7 text-right">
+                            {enriched.score.total}
+                          </span>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${TIER_STYLES[enriched.score.tier] ?? TIER_STYLES.NOT_QUALIFIED}`}>
+                            {enriched.score.tier.replace("_", " ")}
+                          </span>
+                        </div>
+                      </td>
+                    )}
+                    <td className="px-4 py-3 font-medium text-foreground whitespace-nowrap">{lead.name}</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      <span className="truncate max-w-[180px] block">{lead.email}</span>
+                    </td>
+                    <td className="px-4 py-3 text-foreground">
+                      <span className="truncate max-w-[160px] block">{lead.company}</span>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
+                      <span className="truncate max-w-[160px] block">{lead.property_address}</span>
+                    </td>
+                    <td className="px-4 py-3 text-foreground whitespace-nowrap">{lead.city}</td>
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{lead.state}</td>
+                    {isResults && (
+                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap hidden lg:table-cell">
+                        {enriched?.enrichment.walk_score != null
+                          ? enriched.enrichment.walk_score
+                          : <span className="text-xs text-muted-foreground/50">—</span>}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -107,11 +179,24 @@ export default function LeadTable({ leads, errors, onEnrich, onBack }: LeadTable
           <ChevronLeft className="w-4 h-4" />
           Start over
         </Button>
-        <Button onClick={onEnrich} className="font-semibold px-6">
-          Enrich {leads.length} Lead{leads.length !== 1 ? "s" : ""}
-          <ArrowRight className="w-4 h-4" />
-        </Button>
+        {isResults ? (
+          <Button variant="outline" onClick={onEnrich} className="font-semibold px-6">
+            <RefreshCw className="w-4 h-4" />
+            Re-enrich
+          </Button>
+        ) : (
+          <Button onClick={onEnrich} className="font-semibold px-6">
+            Enrich {leads.length} Lead{leads.length !== 1 ? "s" : ""}
+            <ArrowRight className="w-4 h-4" />
+          </Button>
+        )}
       </div>
+
+      {isResults && (
+        <p className="text-xs text-muted-foreground text-center">
+          Click any row to view full enrichment details
+        </p>
+      )}
     </div>
   );
 }
