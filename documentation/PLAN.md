@@ -11,7 +11,7 @@ This tool automates the inbound lead process for EliseAI's sales team. A rep upl
 | Phase | Name | Status | Output |
 |---|---|---|---|
 | [Phase 1](./Phase1.md) | Foundation & Scaffolding | ✅ Done | Dev environment, design system, health check UI |
-| [Phase 2](./Phase2.md) | Lead Ingestion | 🔲 Next | File upload, CSV paste, single-lead form, parsed lead table |
+| [Phase 2](./Phase2.md) | Lead Ingestion | ✅ Done | File upload, CSV paste, single-lead form, parsed lead table |
 | [Phase 3](./Phase3.md) | Enrichment Engine | 🔲 Planned | 5 API integrations running in parallel per lead |
 | [Phase 4](./Phase4.md) | Lead Scoring | 🔲 Planned | 0–100 score, tier classification, score breakdown UI |
 | [Phase 5](./Phase5.md) | Claude AI Layer | 🔲 Planned | Personalized outreach emails, sales insights, score rationale |

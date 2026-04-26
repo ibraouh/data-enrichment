@@ -65,14 +65,14 @@ cd frontend && npm run dev
 
 | Token | HSL | Approx Hex | Usage |
 |---|---|---|---|
-| `--background` | `252 47% 6%` | `#0B0917` | Page background — dark purple-black |
-| `--card` | `254 42% 11%` | `#131028` | Card / surface backgrounds |
-| `--muted` | `254 35% 15%` | `#1B1835` | Subtle lifted surfaces |
-| `--border` | `254 30% 22%` | `#28234A` | Borders, dividers |
-| `--foreground` | `252 60% 96%` | `#EDE9FF` | Primary text — purple-tinted white |
-| `--muted-foreground` | `252 18% 58%` | `#847EA8` | Secondary/placeholder text |
+| `--background` | `260 20% 97%` | `#F4F3FA` | Page background — light purple-tinted white |
+| `--card` | `0 0% 100%` | `#FFFFFF` | Card / surface backgrounds |
+| `--muted` | `260 15% 93%` | `#EBE9F5` | Subtle lifted surfaces |
+| `--border` | `260 15% 86%` | `#D6D2ED` | Borders, dividers |
+| `--foreground` | `240 10% 12%` | `#1A1A2E` | Primary text — near-black |
+| `--muted-foreground` | `240 5% 46%` | `#717090` | Secondary/placeholder text |
 | `--primary` | `261 82% 59%` | `#7847EA` | **EliseAI brand purple** — buttons, links, accents |
-| `--accent` | `261 100% 72%` | `#9D6FFF` | Hover states, highlights |
+| `--accent` | `261 70% 95%` | `#F0EBFF` | Hover state backgrounds |
 
 **Elise color scale** (in `tailwind.config.ts` as `elise-*`):
 - `elise-500` = `#7847EA` — primary brand purple
@@ -98,13 +98,13 @@ cd frontend && npm run dev
 - `shadow-glow-lg` — large glow for hero elements
 
 **Score tier badge colors** (CSS vars available for future use):
-- HOT (80–100): `text-red-400 bg-red-950/40 border-red-800/60`
-- WARM (60–79): `text-amber-400 bg-amber-950/40 border-amber-800/60`
-- NURTURE (40–59): `text-blue-400 bg-blue-950/40 border-blue-800/60`
+- HOT (80–100): `text-red-600 bg-red-50 border-red-200`
+- WARM (60–79): `text-amber-700 bg-amber-50 border-amber-200`
+- NURTURE (40–59): `text-blue-600 bg-blue-50 border-blue-200`
 - NOT_QUALIFIED (0–39): `text-muted-foreground bg-muted border-border`
 
 **Rules:**
-- Dark only — no light/dark toggle, ever.
+- Light only — no dark/light toggle, ever.
 - Never switch back to indigo or slate as the primary — EliseAI's brand color is purple.
 - Never use `Inter` — font is Plus Jakarta Sans.
 - Use `surface-glass` utility class for sticky/overlay elements (header, modals).
