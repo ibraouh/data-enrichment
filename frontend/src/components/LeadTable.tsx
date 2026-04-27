@@ -18,9 +18,9 @@ interface LeadTableProps {
 }
 
 const TIER_STYLES: Record<string, string> = {
-  HOT: "text-red-600 bg-red-50 border border-red-200",
-  WARM: "text-amber-700 bg-amber-50 border border-amber-200",
-  NURTURE: "text-blue-600 bg-blue-50 border border-blue-200",
+  HOT:           "text-red-600 bg-red-50 border border-red-200 dark:text-red-400 dark:bg-red-950/60 dark:border-red-800",
+  WARM:          "text-amber-700 bg-amber-50 border border-amber-200 dark:text-amber-400 dark:bg-amber-950/60 dark:border-amber-800",
+  NURTURE:       "text-blue-600 bg-blue-50 border border-blue-200 dark:text-blue-400 dark:bg-blue-950/60 dark:border-blue-800",
   NOT_QUALIFIED: "text-muted-foreground bg-muted border border-border",
 };
 
@@ -51,13 +51,13 @@ export default function LeadTable({
           <Badge variant="default">{leads.length} leads</Badge>
           {isResults && (
             <>
-              <Badge className="text-red-600 bg-red-50 border border-red-200">
+              <Badge className="text-red-600 bg-red-50 border border-red-200 dark:text-red-400 dark:bg-red-950/60 dark:border-red-800">
                 {enrichedLeads!.filter((l) => l.score.tier === "HOT").length} HOT
               </Badge>
-              <Badge className="text-amber-700 bg-amber-50 border border-amber-200">
+              <Badge className="text-amber-700 bg-amber-50 border border-amber-200 dark:text-amber-400 dark:bg-amber-950/60 dark:border-amber-800">
                 {enrichedLeads!.filter((l) => l.score.tier === "WARM").length} WARM
               </Badge>
-              <Badge className="text-blue-600 bg-blue-50 border border-blue-200">
+              <Badge className="text-blue-600 bg-blue-50 border border-blue-200 dark:text-blue-400 dark:bg-blue-950/60 dark:border-blue-800">
                 {enrichedLeads!.filter((l) => l.score.tier === "NURTURE").length} NURTURE
               </Badge>
               <Badge className="text-muted-foreground bg-muted border border-border">
@@ -74,10 +74,10 @@ export default function LeadTable({
 
       {/* Error banner */}
       {errors.length > 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 overflow-hidden">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/60 overflow-hidden">
           <button
             onClick={() => setErrorsExpanded((v) => !v)}
-            className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+            className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950 transition-colors"
           >
             <span className="flex items-center gap-2">
               <AlertTriangle className="w-3.5 h-3.5" />
@@ -88,7 +88,7 @@ export default function LeadTable({
           {errorsExpanded && (
             <ul className="px-4 pb-3 space-y-1">
               {errors.map((e, i) => (
-                <li key={i} className="text-xs text-amber-700 font-mono">{e}</li>
+                <li key={i} className="text-xs text-amber-700 dark:text-amber-400 font-mono">{e}</li>
               ))}
             </ul>
           )}
@@ -97,8 +97,8 @@ export default function LeadTable({
 
       {/* Enrich error */}
       {enrichError && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5">
-          <p className="text-xs font-medium text-red-700 flex items-center gap-2">
+        <div className="rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/60 px-4 py-2.5">
+          <p className="text-xs font-medium text-red-700 dark:text-red-400 flex items-center gap-2">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
             Enrichment failed: {enrichError}
           </p>
@@ -178,11 +178,6 @@ export default function LeadTable({
         )}
       </div>
 
-      {isResults && (
-        <p className="text-xs text-muted-foreground text-center">
-          Click any row to view full enrichment details
-        </p>
-      )}
     </div>
   );
 }

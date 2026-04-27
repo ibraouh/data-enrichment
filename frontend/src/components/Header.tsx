@@ -1,7 +1,43 @@
-import { Menu } from "lucide-react";
+"use client";
+
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
+import { Menu, Moon, Sun, Monitor } from "lucide-react";
 
 interface HeaderProps {
   onMenuToggle?: () => void;
+}
+
+const THEMES = [
+  { value: "light", icon: Sun,     label: "Light" },
+  { value: "system", icon: Monitor, label: "System" },
+  { value: "dark",  icon: Moon,    label: "Dark"  },
+] as const;
+
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return <div className="w-[88px] h-7" />;
+
+  return (
+    <div className="flex items-center gap-0.5 rounded-lg border border-border bg-muted/50 p-0.5">
+      {THEMES.map(({ value, icon: Icon, label }) => (
+        <button
+          key={value}
+          onClick={() => setTheme(value)}
+          aria-label={label}
+          className={`flex items-center justify-center w-7 h-6 rounded-md transition-colors
+            ${theme === value
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+            }`}
+        >
+          <Icon className="w-3.5 h-3.5" />
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export default function Header({ onMenuToggle }: HeaderProps) {
@@ -21,6 +57,10 @@ export default function Header({ onMenuToggle }: HeaderProps) {
           <span className="font-bold text-primary">EliseAI</span>
           <span className="font-normal text-muted-foreground">Lead Enrichment</span>
         </span>
+
+        <div className="ml-auto">
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   );

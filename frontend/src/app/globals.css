@@ -43,6 +43,34 @@
     --gradient-from: 261 82% 59%;
     --gradient-to: 220 90% 60%;
   }
+
+  .dark {
+    --background: 240 15% 9%;
+    --foreground: 240 10% 95%;
+
+    --card: 240 13% 13%;
+    --card-foreground: 240 10% 95%;
+
+    --muted: 240 12% 17%;
+    --muted-foreground: 240 8% 58%;
+
+    --border: 240 12% 22%;
+    --input: 240 12% 22%;
+
+    --primary: 261 82% 65%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 261 30% 20%;
+    --secondary-foreground: 261 60% 85%;
+
+    --accent: 261 40% 20%;
+    --accent-foreground: 261 60% 85%;
+
+    --ring: 261 82% 65%;
+
+    --gradient-from: 261 82% 65%;
+    --gradient-to: 220 90% 65%;
+  }
 }
 
 @layer base {
@@ -82,7 +110,7 @@
 
   /* Glass-style surface for sticky/overlay elements */
   .surface-glass {
-    background: hsl(0 0% 100% / 0.85);
+    background: hsl(var(--background) / 0.85);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }

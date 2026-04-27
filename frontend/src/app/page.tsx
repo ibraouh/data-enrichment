@@ -68,7 +68,7 @@ export default function Home() {
           onClose={() => setSidebarOpen(false)}
         />
 
-        <main className="flex-1 scrollbar-left px-6 py-10">
+        <main className="flex-1 overflow-y-auto px-6 py-10">
 
           {step === "upload" && (
             <div className="max-w-xl mx-auto">

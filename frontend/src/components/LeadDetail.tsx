@@ -32,16 +32,16 @@ interface LeadDetailProps {
 // ---------------------------------------------------------------------------
 
 const TIER_STYLES: Record<string, string> = {
-  HOT: "text-red-600 bg-red-50 border border-red-200",
-  WARM: "text-amber-700 bg-amber-50 border border-amber-200",
-  NURTURE: "text-blue-600 bg-blue-50 border border-blue-200",
+  HOT:           "text-red-600 bg-red-50 border border-red-200 dark:text-red-400 dark:bg-red-950/60 dark:border-red-800",
+  WARM:          "text-amber-700 bg-amber-50 border border-amber-200 dark:text-amber-400 dark:bg-amber-950/60 dark:border-amber-800",
+  NURTURE:       "text-blue-600 bg-blue-50 border border-blue-200 dark:text-blue-400 dark:bg-blue-950/60 dark:border-blue-800",
   NOT_QUALIFIED: "text-muted-foreground bg-muted border border-border",
 };
 
 const SENTIMENT_STYLES: Record<string, string> = {
-  positive: "text-emerald-700 bg-emerald-50 border border-emerald-200",
-  neutral: "text-muted-foreground bg-muted border border-border",
-  negative: "text-red-600 bg-red-50 border border-red-200",
+  positive: "text-emerald-700 bg-emerald-50 border border-emerald-200 dark:text-emerald-400 dark:bg-emerald-950/60 dark:border-emerald-800",
+  neutral:  "text-muted-foreground bg-muted border border-border",
+  negative: "text-red-600 bg-red-50 border border-red-200 dark:text-red-400 dark:bg-red-950/60 dark:border-red-800",
 };
 
 function ScoreBar({ label, value, max }: { label: string; value: number; max: number }) {
@@ -401,7 +401,7 @@ export default function LeadDetail({ lead, allLeads, onBack, onNavigate, onAIGen
                 </p>
               </div>
               {aiError && (
-                <p className="text-xs text-red-600">{aiError}</p>
+                <p className="text-xs text-red-600 dark:text-red-400">{aiError}</p>
               )}
               <button
                 onClick={handleRunAI}

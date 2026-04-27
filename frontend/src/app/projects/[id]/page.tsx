@@ -111,7 +111,7 @@ export default function ProjectPage() {
           onClose={() => setSidebarOpen(false)}
         />
 
-        <main className="flex-1 scrollbar-left px-6 py-10">
+        <main className="flex-1 overflow-y-auto px-6 py-10">
 
           {step === "loading" && (
             <div className="flex flex-col items-center justify-center gap-3 py-24">
