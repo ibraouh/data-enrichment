@@ -68,7 +68,7 @@ export default function Home() {
           onClose={() => setSidebarOpen(false)}
         />
 
-        <main className="flex-1 overflow-y-auto px-6 py-10">
+        <main className="flex-1 scrollbar-left px-6 py-10">
 
           {step === "upload" && (
             <div className="max-w-xl mx-auto">
@@ -104,7 +104,7 @@ export default function Home() {
                   Enriching {parsedLeads.length} lead{parsedLeads.length !== 1 ? "s" : ""}…
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Calling Census, WalkScore, FRED, NewsAPI, and Claude AI — this takes ~20s
+                  Fetching data from enrichment APIs — this takes ~15s
                 </p>
               </div>
             </div>

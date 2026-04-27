@@ -50,10 +50,16 @@ export interface EnrichmentData {
   renter_percentage: number | null;
   poverty_rate: number | null;
   avg_wage: number | null;
-  walk_score: number | null;
-  transit_score: number | null;
-  bike_score: number | null;
-  walk_description: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  osm_suburb: string | null;
+  osm_quarter: string | null;
+  osm_postcode: string | null;
+  osm_county: string | null;
+  fmr_studio: number | null;
+  fmr_1br: number | null;
+  fmr_2br: number | null;
+  nearby_multifamily_count: number | null;
   state_unemployment_rate: number | null;
   rental_vacancy_rate: number | null;
   housing_price_index: number | null;
@@ -104,8 +110,10 @@ export interface RawEnrichmentData {
   id: string;
   lead_id: string;
   census: Record<string, unknown> | null;
+  nominatim: Record<string, unknown> | null;
+  overpass: Record<string, unknown> | null;
+  hud_fmr: Record<string, unknown> | null;
   fred: Record<string, unknown> | null;
-  walkscore: Record<string, unknown> | null;
   news: Record<string, unknown> | null;
   enriched_at: string;
 }

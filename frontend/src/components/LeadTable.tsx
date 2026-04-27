@@ -57,19 +57,19 @@ export default function LeadTable({
               <Badge className="text-amber-700 bg-amber-50 border border-amber-200">
                 {enrichedLeads!.filter((l) => l.score.tier === "WARM").length} WARM
               </Badge>
+              <Badge className="text-blue-600 bg-blue-50 border border-blue-200">
+                {enrichedLeads!.filter((l) => l.score.tier === "NURTURE").length} NURTURE
+              </Badge>
+              <Badge className="text-muted-foreground bg-muted border border-border">
+                {enrichedLeads!.filter((l) => l.score.tier === "NOT_QUALIFIED").length} NOT QUALIFIED
+              </Badge>
             </>
           )}
           {errors.length > 0 && (
             <Badge variant="destructive">{errors.length} skipped</Badge>
           )}
         </div>
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ChevronLeft className="w-3.5 h-3.5" />
-          {isResults ? "Start over" : "Upload different file"}
-        </button>
+        <div />
       </div>
 
       {/* Error banner */}
@@ -120,9 +120,6 @@ export default function LeadTable({
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden md:table-cell">Property Address</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">City</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">State</th>
-                {isResults && (
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden lg:table-cell">Walk</th>
-                )}
               </tr>
             </thead>
             <tbody>
@@ -158,13 +155,6 @@ export default function LeadTable({
                     </td>
                     <td className="px-4 py-3 text-foreground whitespace-nowrap">{lead.city}</td>
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{lead.state}</td>
-                    {isResults && (
-                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap hidden lg:table-cell">
-                        {enriched?.enrichment.walk_score != null
-                          ? enriched.enrichment.walk_score
-                          : <span className="text-xs text-muted-foreground/50">—</span>}
-                      </td>
-                    )}
                   </tr>
                 );
               })}
@@ -174,15 +164,11 @@ export default function LeadTable({
       </div>
 
       {/* Footer actions */}
-      <div className="flex items-center justify-between pt-2">
-        <Button variant="ghost" onClick={onBack} className="text-muted-foreground">
-          <ChevronLeft className="w-4 h-4" />
-          Start over
-        </Button>
+      <div className="flex items-center justify-end pt-2">
         {isResults ? (
           <Button variant="outline" onClick={onEnrich} className="font-semibold px-6">
             <RefreshCw className="w-4 h-4" />
-            Re-enrich
+            Re-enrich all
           </Button>
         ) : (
           <Button onClick={onEnrich} className="font-semibold px-6">

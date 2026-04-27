@@ -39,18 +39,24 @@ create table if not exists enrichment_results (
   id                       uuid primary key default gen_random_uuid(),
   lead_id                  uuid not null unique references leads(id) on delete cascade,
 
-  -- Census / DataUSA demographics
+  -- Census ACS5 demographics
   median_household_income  integer,
   total_population         integer,
   renter_percentage        numeric(5, 2),
   avg_wage                 integer,
   poverty_rate             numeric(5, 2),
 
-  -- WalkScore
-  walk_score               integer,
-  transit_score            integer,
-  bike_score               integer,
-  walk_description         text,
+  -- Nominatim geocoding
+  latitude                 numeric(9, 6),
+  longitude                numeric(9, 6),
+
+  -- HUD Fair Market Rents
+  fmr_studio               integer,
+  fmr_1br                  integer,
+  fmr_2br                  integer,
+
+  -- Overpass — nearby multifamily building count
+  nearby_multifamily_count integer,
 
   -- FRED economic indicators
   state_unemployment_rate  numeric(5, 2),
@@ -102,8 +108,10 @@ create table if not exists enrichment_raw (
   id           uuid primary key default gen_random_uuid(),
   lead_id      uuid not null unique references leads(id) on delete cascade,
   census       jsonb,
+  nominatim    jsonb,
+  hud_fmr      jsonb,
+  permits      jsonb,
   fred         jsonb,
-  walkscore    jsonb,
   news         jsonb,
   enriched_at  timestamptz not null default now()
 );
@@ -137,9 +145,14 @@ create or replace view enriched_leads as
     er.median_household_income,
     er.total_population,
     er.renter_percentage,
-    er.walk_score,
-    er.transit_score,
-    er.bike_score,
+    er.avg_wage,
+    er.poverty_rate,
+    er.latitude,
+    er.longitude,
+    er.fmr_studio,
+    er.fmr_1br,
+    er.fmr_2br,
+    er.nearby_multifamily_count,
     er.state_unemployment_rate,
     er.rental_vacancy_rate,
     er.housing_price_index,

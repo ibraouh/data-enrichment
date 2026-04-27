@@ -1,4 +1,4 @@
-import type { EnrichLeadsResponse, ParseLeadsResponse, Project, RawEnrichmentData, RawLead, StoredLead } from "./types";
+import type { AIInsights, EnrichedLead, EnrichLeadsResponse, ParseLeadsResponse, Project, RawEnrichmentData, RawLead, StoredLead } from "./types";
 
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
@@ -90,6 +90,29 @@ export async function parseLeadsSingle(lead: RawLead): Promise<ParseLeadsRespons
 // ---------------------------------------------------------------------------
 // Enrichment (Phase 3)
 // ---------------------------------------------------------------------------
+
+export async function generateOutreach(lead: EnrichedLead): Promise<AIInsights> {
+  const res = await fetch(`${API_URL}/api/leads/${lead.id}/outreach`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      lead: {
+        id: lead.id,
+        project_id: lead.project_id,
+        name: lead.name,
+        email: lead.email,
+        company: lead.company,
+        property_address: lead.property_address,
+        city: lead.city,
+        state: lead.state,
+        country: lead.country,
+      },
+      enrichment: lead.enrichment,
+      score: lead.score,
+    }),
+  });
+  return handleResponse(res);
+}
 
 export async function getRawEnrichment(leadId: string): Promise<RawEnrichmentData> {
   const res = await fetch(`${API_URL}/api/leads/${leadId}/raw-enrichment`);

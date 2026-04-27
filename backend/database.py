@@ -81,8 +81,10 @@ async def save_raw_enrichment(lead_id: str, raw: dict) -> None:
     row = {
         "lead_id": lead_id,
         "census": raw.get("census"),
+        "nominatim": raw.get("nominatim"),
+        "overpass": raw.get("overpass"),
+        "hud_fmr": raw.get("hud_fmr"),
         "fred": raw.get("fred"),
-        "walkscore": raw.get("walkscore"),
         "news": raw.get("news"),
     }
     db.table("enrichment_raw").upsert(row, on_conflict="lead_id").execute()
@@ -103,10 +105,16 @@ async def save_enrichment_result(lead_id: str, data: dict) -> None:
         "renter_percentage": data.get("renter_percentage"),
         "avg_wage": data.get("avg_wage"),
         "poverty_rate": data.get("poverty_rate"),
-        "walk_score": data.get("walk_score"),
-        "transit_score": data.get("transit_score"),
-        "bike_score": data.get("bike_score"),
-        "walk_description": data.get("walk_description"),
+        "latitude": data.get("latitude"),
+        "longitude": data.get("longitude"),
+        "osm_suburb": data.get("osm_suburb"),
+        "osm_quarter": data.get("osm_quarter"),
+        "osm_postcode": data.get("osm_postcode"),
+        "osm_county": data.get("osm_county"),
+        "fmr_studio": data.get("fmr_studio"),
+        "fmr_1br": data.get("fmr_1br"),
+        "fmr_2br": data.get("fmr_2br"),
+        "nearby_multifamily_count": data.get("nearby_multifamily_count"),
         "state_unemployment_rate": data.get("state_unemployment_rate"),
         "rental_vacancy_rate": data.get("rental_vacancy_rate"),
         "housing_price_index": data.get("housing_price_index"),
@@ -115,6 +123,22 @@ async def save_enrichment_result(lead_id: str, data: dict) -> None:
         "enrichment_errors": data.get("enrichment_errors", []),
     }
     db.table("enrichment_results").upsert(row, on_conflict="lead_id").execute()
+
+
+async def save_ai_insights(lead_id: str, ai: dict) -> None:
+    db = get_client()
+    db.table("outreach").upsert(
+        {
+            "lead_id": lead_id,
+            "email_subject": ai.get("email", {}).get("subject", ""),
+            "email_body": ai.get("email", {}).get("body", ""),
+            "sales_insights": ai.get("sales_insights", []),
+        },
+        on_conflict="lead_id",
+    ).execute()
+    rationale = ai.get("score_rationale", "")
+    if rationale:
+        db.table("lead_scores").update({"rationale": rationale}).eq("lead_id", lead_id).execute()
 
 
 async def save_lead_score(lead_id: str, score: dict) -> None:

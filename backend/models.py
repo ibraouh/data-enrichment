@@ -38,13 +38,20 @@ class EnrichmentData(BaseModel):
     total_population: Optional[int] = None
     renter_percentage: Optional[float] = None
     poverty_rate: Optional[float] = None
-    # DataUSA
     avg_wage: Optional[int] = None
-    # WalkScore
-    walk_score: Optional[int] = None
-    transit_score: Optional[int] = None
-    bike_score: Optional[int] = None
-    walk_description: Optional[str] = None
+    # Nominatim
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    osm_suburb: Optional[str] = None      # borough/suburb e.g. "Manhattan"
+    osm_quarter: Optional[str] = None     # neighborhood e.g. "Upper West Side"
+    osm_postcode: Optional[str] = None    # ZIP code
+    osm_county: Optional[str] = None      # county e.g. "New York County"
+    # HUD Fair Market Rents
+    fmr_studio: Optional[int] = None
+    fmr_1br: Optional[int] = None
+    fmr_2br: Optional[int] = None
+    # Overpass — nearby multifamily building count
+    nearby_multifamily_count: Optional[int] = None
     # FRED
     state_unemployment_rate: Optional[float] = None
     rental_vacancy_rate: Optional[float] = None
@@ -95,3 +102,9 @@ class EnrichLeadsResponse(BaseModel):
 
 class EnrichRequest(BaseModel):
     leads: Optional[list[StoredLead]] = None
+
+
+class GenerateOutreachRequest(BaseModel):
+    lead: StoredLead
+    enrichment: EnrichmentData
+    score: ScoreBreakdown

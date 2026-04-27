@@ -48,6 +48,11 @@
 @layer base {
   * {
     @apply border-border;
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    display: none;
   }
 
   body {
@@ -80,5 +85,35 @@
     background: hsl(0 0% 100% / 0.85);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Thin always-visible scrollbar on the left side */
+  .scrollbar-left {
+    direction: rtl;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(261 82% 59% / 0.25) transparent;
+    overflow-y: scroll;
+  }
+
+  .scrollbar-left > * {
+    direction: ltr;
+  }
+
+  .scrollbar-left::-webkit-scrollbar {
+    display: block;
+    width: 3px;
+  }
+
+  .scrollbar-left::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-left::-webkit-scrollbar-thumb {
+    background: hsl(261 82% 59% / 0.25);
+    border-radius: 9999px;
+  }
+
+  .scrollbar-left::-webkit-scrollbar-thumb:hover {
+    background: hsl(261 82% 59% / 0.45);
   }
 }

@@ -10,17 +10,19 @@ from dotenv import load_dotenv
 from database import (
     create_project, delete_project, get_enriched_leads, get_leads_for_project,
     get_project_by_id, get_projects, get_raw_enrichment, rename_project,
-    save_enrichment_result, save_lead_score, save_leads, save_raw_enrichment,
-    update_project_status,
+    save_ai_insights, save_enrichment_result, save_lead_score, save_leads,
+    save_raw_enrichment, update_project_status,
 )
 from models import (
     AIInsights, EnrichedLead, EnrichLeadsResponse, EnrichmentData, EnrichRequest,
-    ParseLeadsResponse, RawLead, ScoreBreakdown, StoredLead,
+    GenerateOutreachRequest, OutreachEmail, ParseLeadsResponse, RawLead, ScoreBreakdown, StoredLead,
 )
 from utils import parse_csv_bytes, parse_csv_text, parse_excel_bytes
 from enrichment.census import enrich_census
 from enrichment.datausa import enrich_datausa
-from enrichment.walkscore import enrich_walkscore
+from enrichment.nominatim import enrich_nominatim
+from enrichment.overpass import enrich_overpass
+from enrichment.hud_fmr import enrich_hud_fmr
 from enrichment.fred import enrich_fred
 from enrichment.news import enrich_news
 from scoring import score as score_lead
@@ -131,6 +133,14 @@ async def parse_lead_single(lead: RawLead):
     return await _persist_and_respond([lead], [], "Single Lead", "single")
 
 
+@app.post("/api/leads/{lead_id}/outreach", response_model=AIInsights)
+async def generate_lead_outreach(lead_id: str, body: GenerateOutreachRequest):
+    insights = await generate_outreach(body.lead, body.enrichment, body.score)
+    if SUPABASE_ENABLED:
+        await save_ai_insights(lead_id, insights.model_dump())
+    return insights
+
+
 @app.get("/api/leads/{lead_id}/raw-enrichment")
 async def get_lead_raw_enrichment(lead_id: str):
     if not SUPABASE_ENABLED:
@@ -169,12 +179,19 @@ def _row_to_enriched_lead(row: dict) -> EnrichedLead:
             renter_percentage=row.get("renter_percentage"),
             avg_wage=row.get("avg_wage"),
             poverty_rate=row.get("poverty_rate"),
-            walk_score=row.get("walk_score"),
-            transit_score=row.get("transit_score"),
-            bike_score=row.get("bike_score"),
-            walk_description=row.get("walk_description"),
+            latitude=row.get("latitude"),
+            longitude=row.get("longitude"),
+            osm_suburb=row.get("osm_suburb"),
+            osm_quarter=row.get("osm_quarter"),
+            osm_postcode=row.get("osm_postcode"),
+            osm_county=row.get("osm_county"),
+            fmr_studio=row.get("fmr_studio"),
+            fmr_1br=row.get("fmr_1br"),
+            fmr_2br=row.get("fmr_2br"),
+            nearby_multifamily_count=row.get("nearby_multifamily_count"),
             state_unemployment_rate=row.get("state_unemployment_rate"),
             rental_vacancy_rate=row.get("rental_vacancy_rate"),
+            housing_price_index=row.get("housing_price_index"),
             news_sentiment=row.get("news_sentiment"),
             news_articles=row.get("news_articles") or [],
             enrichment_errors=row.get("enrichment_errors") or [],
@@ -187,6 +204,14 @@ def _row_to_enriched_lead(row: dict) -> EnrichedLead:
             geographic_score=row.get("geographic_score") or 0,
             total=row.get("score") or 0,
             tier=row.get("tier") or "NOT_QUALIFIED",
+        ),
+        ai=AIInsights(
+            email=OutreachEmail(
+                subject=row.get("email_subject") or "",
+                body=row.get("email_body") or "",
+            ),
+            score_rationale=row.get("score_rationale") or "",
+            sales_insights=row.get("sales_insights") or [],
         ),
     )
 
@@ -217,17 +242,29 @@ async def enrich_project_leads(
     async def process_lead(row: dict, http: httpx.AsyncClient) -> EnrichedLead:
         async with sem:
             lead = RawLead(**{k: v for k, v in row.items() if k in RawLead.model_fields})
+
+            # Phase 1: geocode first — coordinates feed Overpass, county feeds HUD FMR
+            nom = await enrich_nominatim(lead, http)
+            lat = nom.get("latitude")
+            lon = nom.get("longitude")
+            county = nom.get("county")
+
+            # Phase 2: all remaining modules in parallel
             results = await asyncio.gather(
                 enrich_census(lead, http),
                 enrich_datausa(lead, http),
-                enrich_walkscore(lead, http),
+                enrich_overpass(lat, lon, http),
+                enrich_hud_fmr(lead, county, http),
                 enrich_fred(lead, http),
                 enrich_news(lead, http),
             )
 
-        merged: dict = {}
+        merged: dict = {**nom}
         raw_by_source: dict = {}
-        for r, source in zip(results, ["census", "datausa", "walkscore", "fred", "news"]):
+        merged.pop("county", None)  # county is routing metadata, not an enrichment field
+        if (nom_raw := merged.pop("_raw", None)):
+            raw_by_source["nominatim"] = nom_raw
+        for r, source in zip(results, ["census", "datausa", "overpass", "hud_fmr", "fred", "news"]):
             raw = r.pop("_raw", None)
             merged.update(r)
             if raw:
@@ -241,9 +278,6 @@ async def enrich_project_leads(
         score_input = {**merged, "city": lead.city, "state": lead.state}
         score_breakdown = score_lead(score_input)
 
-        stored = StoredLead(**{k: v for k, v in row.items() if k in StoredLead.model_fields})
-        ai_insights = await generate_outreach(stored, enrichment, score_breakdown)
-
         if SUPABASE_ENABLED:
             lead_id = row.get("id", "")
             await asyncio.gather(
@@ -252,7 +286,7 @@ async def enrich_project_leads(
                 save_raw_enrichment(lead_id, raw_by_source),
             )
 
-        return EnrichedLead(**row, enrichment=enrichment, score=score_breakdown, ai=ai_insights)
+        return EnrichedLead(**row, enrichment=enrichment, score=score_breakdown)
 
     try:
         async with httpx.AsyncClient() as http:

@@ -48,43 +48,43 @@ def _demographics(e: dict) -> int:
     income = e.get("median_household_income")
     if income is not None:
         if income >= 80_000:
-            pts += 12
+            pts += 14
         elif income >= 60_000:
-            pts += 10
+            pts += 11
         elif income >= 45_000:
-            pts += 6
+            pts += 7
         else:
             pts += 2
     else:
-        pts += 5  # neutral when no data
+        pts += 6  # neutral when no data
 
     renter = e.get("renter_percentage")
     if renter is not None:
         if renter >= 60:
-            pts += 12
+            pts += 14
         elif renter >= 45:
-            pts += 9
+            pts += 11
         elif renter >= 30:
-            pts += 5
+            pts += 6
         else:
             pts += 1
     else:
-        pts += 4
+        pts += 5
 
     pop = e.get("total_population")
     if pop is not None:
         if pop >= 500_000:
-            pts += 6
+            pts += 7
         elif pop >= 100_000:
-            pts += 4
+            pts += 5
         elif pop >= 50_000:
-            pts += 2
+            pts += 3
         else:
             pts += 1
     else:
         pts += 2
 
-    return min(pts, 30)
+    return min(pts, 35)
 
 
 def _market_health(e: dict) -> int:
@@ -104,19 +104,19 @@ def _market_health(e: dict) -> int:
     else:
         pts += 5
 
-    # Rental vacancy rate (0–10 pts): low vacancy = high rental demand = more value for EliseAI
+    # Rental vacancy rate (0–5 pts): low vacancy = high rental demand
     vacancy = e.get("rental_vacancy_rate")
     if vacancy is not None:
         if vacancy < 4.0:
-            pts += 10
-        elif vacancy < 6.0:
-            pts += 8
-        elif vacancy < 8.0:
             pts += 5
-        else:
+        elif vacancy < 6.0:
+            pts += 4
+        elif vacancy < 8.0:
             pts += 2
+        else:
+            pts += 0
     else:
-        pts += 5
+        pts += 2
 
     # Poverty rate (0–5 pts)
     poverty = e.get("poverty_rate")
@@ -130,31 +130,52 @@ def _market_health(e: dict) -> int:
         else:
             pts += 0
     else:
-        pts += 3
+        pts += 2
 
-    return min(pts, 25)
+    # HUD Fair Market Rent — 2BR (0–10 pts): high FMR = competitive rental market
+    fmr_2br = e.get("fmr_2br")
+    if fmr_2br is not None:
+        if fmr_2br >= 2000:
+            pts += 10
+        elif fmr_2br >= 1500:
+            pts += 7
+        elif fmr_2br >= 1000:
+            pts += 4
+        else:
+            pts += 0
+    else:
+        pts += 0
+
+    # Nearby multifamily buildings via Overpass (0–5 pts): high count = dense rental market
+    multifamily = e.get("nearby_multifamily_count")
+    if multifamily is not None:
+        if multifamily >= 300:
+            pts += 5
+        elif multifamily >= 150:
+            pts += 4
+        elif multifamily >= 50:
+            pts += 3
+        elif multifamily >= 10:
+            pts += 1
+        else:
+            pts += 0
+    else:
+        pts += 0
+
+    return min(pts, 35)
 
 
-def _walkability(e: dict) -> int:
-    ws = e.get("walk_score")
-    if ws is None:
-        return 8
-    if ws >= 70:
-        return 20
-    if ws >= 50:
-        return 14
-    if ws >= 30:
-        return 8
-    return 2
+def _walkability(_e: dict) -> int:
+    return 0  # disabled — WalkScore requires a paid API key
 
 
 def _news(e: dict) -> int:
     sentiment = e.get("news_sentiment")
     if sentiment == "positive":
-        return 15
+        return 20
     if sentiment == "negative":
-        return 2
-    return 8  # neutral or no data
+        return 3
+    return 10  # neutral or no data
 
 
 def _geographic(e: dict) -> int:

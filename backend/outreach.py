@@ -47,20 +47,27 @@ async def generate_outreach(
         income_str = f"${enrichment.median_household_income:,}" if enrichment.median_household_income else "unknown"
         renter_str = f"{enrichment.renter_percentage:.0f}%" if enrichment.renter_percentage is not None else "unknown"
         pop_str = f"{enrichment.total_population:,}" if enrichment.total_population else "unknown"
-        walk_str = (
-            f"{enrichment.walk_score} ({enrichment.walk_description})"
-            if enrichment.walk_score is not None
-            else "unknown"
-        )
+        location_parts = [p for p in [enrichment.osm_quarter, enrichment.osm_suburb, enrichment.osm_county] if p]
+        location_str = ", ".join(location_parts) if location_parts else None
+        postcode_str = enrichment.osm_postcode or None
         unemp_str = f"{enrichment.state_unemployment_rate}%" if enrichment.state_unemployment_rate is not None else "unknown"
+        vacancy_str = f"{enrichment.rental_vacancy_rate}%" if enrichment.rental_vacancy_rate is not None else "unknown"
+        hpi_str = str(enrichment.housing_price_index) if enrichment.housing_price_index is not None else "unknown"
+        fmr_2br_str = f"${enrichment.fmr_2br:,}/mo" if enrichment.fmr_2br is not None else "unknown"
+        fmr_1br_str = f"${enrichment.fmr_1br:,}/mo" if enrichment.fmr_1br is not None else "unknown"
+        fmr_studio_str = f"${enrichment.fmr_studio:,}/mo" if enrichment.fmr_studio is not None else "unknown"
+        multifamily_str = str(enrichment.nearby_multifamily_count) if enrichment.nearby_multifamily_count is not None else "unknown"
+        avg_wage_str = f"${enrichment.avg_wage:,}" if enrichment.avg_wage else "unknown"
+        poverty_str = f"{enrichment.poverty_rate:.1f}%" if enrichment.poverty_rate is not None else "unknown"
 
         user_prompt = f"""Lead context:
 - Contact: {lead.name} at {lead.company}
-- Property: {lead.property_address}, {lead.city}, {lead.state}
+- Property: {lead.property_address}, {lead.city}, {lead.state}{f" {postcode_str}" if postcode_str else ""}{"  (" + location_str + ")" if location_str else ""}
 - Lead score: {score.total}/100 ({score.tier})
-- Demographics: {income_str} median income, {renter_str} renter rate, pop {pop_str}
-- Walkability: Walk Score {walk_str}
-- Market: {unemp_str} unemployment
+- Demographics: {income_str} median income, {avg_wage_str} avg wage, {renter_str} renter rate, pop {pop_str}, {poverty_str} poverty rate
+- Fair market rents: studio {fmr_studio_str}, 1BR {fmr_1br_str}, 2BR {fmr_2br_str}
+- Multifamily density: {multifamily_str} nearby multifamily buildings
+- Market conditions: {unemp_str} unemployment, {vacancy_str} rental vacancy rate, HPI {hpi_str}
 - Recent news: {_summarize_news(enrichment)}
 
 Return ONLY valid JSON with exactly these keys:
@@ -71,7 +78,7 @@ Return ONLY valid JSON with exactly these keys:
   "sales_insights": ["...", "...", "..."]
 }}
 
-Email guidelines: 3-4 short paragraphs, under 200 words, reference at least one specific data point (city stat, news, or WalkScore), end with a soft CTA for a 15-min call, sign as "the EliseAI team"."""
+Email guidelines: 3-4 short paragraphs, under 200 words, reference at least one specific data point (city stat, news, or rental market data), end with a soft CTA for a 15-min call, sign as "the EliseAI team"."""
 
         response = await client.messages.create(
             model="claude-sonnet-4-6",

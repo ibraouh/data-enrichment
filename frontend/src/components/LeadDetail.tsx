@@ -9,19 +9,22 @@ import {
   Check,
   ExternalLink,
   Loader2,
+  RefreshCw,
   ChevronDown,
   ChevronRight as ChevronRightIcon,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { getRawEnrichment } from "@/lib/api";
-import type { EnrichedLead, RawEnrichmentData } from "@/lib/types";
+import { generateOutreach, getRawEnrichment } from "@/lib/api";
+import type { AIInsights, EnrichedLead, RawEnrichmentData } from "@/lib/types";
 
 interface LeadDetailProps {
   lead: EnrichedLead;
   allLeads: EnrichedLead[];
   onBack: () => void;
   onNavigate: (lead: EnrichedLead) => void;
+  onAIGenerated: (leadId: string, ai: AIInsights) => void;
+  onReenrich: (lead: EnrichedLead) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -107,39 +110,15 @@ function RawSection({ title, data }: { title: string; data: Record<string, unkno
   );
 }
 
-function RawDataTab({ leadId }: { leadId: string }) {
-  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
-  const [raw, setRaw] = useState<RawEnrichmentData | null>(null);
-
-  useEffect(() => {
-    setStatus("loading");
-    setRaw(null);
-    getRawEnrichment(leadId)
-      .then((data) => { setRaw(data); setStatus("done"); })
-      .catch(() => setStatus("error"));
-  }, [leadId]);
-
-  if (status === "loading" || status === "idle") {
-    return (
-      <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
-        <Loader2 className="w-4 h-4 animate-spin" />
-        <span className="text-sm">Loading raw API responses…</span>
-      </div>
-    );
-  }
-  if (status === "error") {
-    return (
-      <p className="text-sm text-muted-foreground py-8 text-center">
-        Could not load raw data. Make sure the database is configured.
-      </p>
-    );
-  }
+function RawDataTab({ raw }: { raw: RawEnrichmentData | null }) {
   return (
     <div className="space-y-2 pt-2">
       <p className="text-xs text-muted-foreground pb-1">Full API responses as received — click a source to expand.</p>
       <RawSection title="Census ACS5" data={raw?.census ?? null} />
+      <RawSection title="Nominatim (Geocoding)" data={raw?.nominatim ?? null} />
+      <RawSection title="Overpass (Multifamily Density)" data={raw?.overpass ?? null} />
+      <RawSection title="HUD Fair Market Rents" data={raw?.hud_fmr ?? null} />
       <RawSection title="FRED" data={raw?.fred ?? null} />
-      <RawSection title="WalkScore" data={raw?.walkscore ?? null} />
       <RawSection title="NewsAPI" data={raw?.news ?? null} />
       {raw?.enriched_at && (
         <p className="text-xs text-muted-foreground pt-1">
@@ -147,6 +126,41 @@ function RawDataTab({ leadId }: { leadId: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+function NominatimSection({ enrichment, raw }: { enrichment: EnrichedLead["enrichment"]; raw: RawEnrichmentData | null }) {
+  // Prefer stored model fields; fall back to raw Nominatim response for older leads
+  const rawAddr = (raw?.nominatim as Record<string, unknown> | null | undefined)
+    ?.result as Record<string, unknown> | undefined;
+  const rawAddress = rawAddr?.address as Record<string, string> | undefined;
+
+  const suburb   = enrichment.osm_suburb   ?? rawAddress?.suburb   ?? null;
+  const quarter  = enrichment.osm_quarter  ?? rawAddress?.quarter  ?? null;
+  const postcode = enrichment.osm_postcode ?? rawAddress?.postcode ?? null;
+  const county   = enrichment.osm_county   ?? rawAddress?.county   ?? null;
+  const displayName = rawAddr?.display_name as string | undefined;
+
+  if (!suburb && !quarter && !postcode && !county) return null;
+
+  return (
+    <>
+      <div className="h-px bg-border" />
+      <section>
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          Property Location <span className="normal-case font-normal">(OpenStreetMap)</span>
+        </h3>
+        {displayName && (
+          <p className="text-xs text-muted-foreground mb-3 leading-relaxed">{displayName}</p>
+        )}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          {postcode && <Stat label="ZIP / Postcode" value={postcode} />}
+          {suburb && <Stat label="Borough / Suburb" value={suburb} />}
+          {quarter && <Stat label="Neighborhood" value={quarter} />}
+          {county && <Stat label="County" value={county} />}
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -171,21 +185,64 @@ function CopyButton({ text }: { text: string }) {
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
-export default function LeadDetail({ lead, allLeads, onBack, onNavigate }: LeadDetailProps) {
+export default function LeadDetail({ lead, allLeads, onBack, onNavigate, onAIGenerated, onReenrich }: LeadDetailProps) {
   const { enrichment: e, score: s, ai } = lead;
   const currentIndex = allLeads.findIndex((l) => l.id === lead.id);
   const prevLead = currentIndex > 0 ? allLeads[currentIndex - 1] : null;
   const nextLead = currentIndex < allLeads.length - 1 ? allLeads[currentIndex + 1] : null;
   const hasAI = ai.score_rationale || ai.sales_insights.length > 0 || ai.email.subject;
 
+  const [aiLoading, setAILoading] = useState(false);
+  const [aiError, setAIError] = useState<string | null>(null);
+  const [reenriching, setReenriching] = useState(false);
+  const [rawData, setRawData] = useState<RawEnrichmentData | null>(null);
+
+  useEffect(() => {
+    setRawData(null);
+    getRawEnrichment(lead.id)
+      .then(setRawData)
+      .catch(() => {});
+  }, [lead.id]);
+
+  async function handleReenrich() {
+    setReenriching(true);
+    await onReenrich(lead);
+    setReenriching(false);
+  }
+
+  async function handleRunAI() {
+    setAILoading(true);
+    setAIError(null);
+    try {
+      const result = await generateOutreach(lead);
+      onAIGenerated(lead.id, result);
+    } catch (err) {
+      setAIError(err instanceof Error ? err.message : "AI generation failed.");
+    } finally {
+      setAILoading(false);
+    }
+  }
+
   return (
     <div className="w-full max-w-4xl mx-auto">
       {/* Nav bar — sticky within the scrolling content area */}
       <div className="sticky top-0 z-10 -mx-6 px-6 py-3 mb-6 border-b border-border bg-background/90 backdrop-blur-sm flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={onBack} className="text-muted-foreground gap-1.5">
-          <ArrowLeft className="w-4 h-4" />
-          Back to leads
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={onBack} className="text-muted-foreground gap-1.5">
+            <ArrowLeft className="w-4 h-4" />
+            Back to leads
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleReenrich}
+            disabled={reenriching}
+            className="gap-1.5 font-semibold"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${reenriching ? "animate-spin" : ""}`} />
+            {reenriching ? "Re-enriching…" : "Re-enrich"}
+          </Button>
+        </div>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -248,10 +305,9 @@ export default function LeadDetail({ lead, allLeads, onBack, onNavigate }: LeadD
           <section>
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Score Breakdown</h3>
             <div className="space-y-2.5">
-              <ScoreBar label="Demographics" value={s.demographics_score} max={30} />
-              <ScoreBar label="Market Health" value={s.market_health_score} max={25} />
-              <ScoreBar label="Walkability" value={s.walkability_score} max={20} />
-              <ScoreBar label="News Sentiment" value={s.news_score} max={15} />
+              <ScoreBar label="Demographics" value={s.demographics_score} max={35} />
+              <ScoreBar label="Market Health" value={s.market_health_score} max={35} />
+              <ScoreBar label="News Sentiment" value={s.news_score} max={20} />
               <ScoreBar label="Geographic" value={s.geographic_score} max={10} />
             </div>
           </section>
@@ -272,32 +328,15 @@ export default function LeadDetail({ lead, allLeads, onBack, onNavigate }: LeadD
           <div className="h-px bg-border" />
 
           <section>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Market Health (FRED)</h3>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Market Health</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <Stat label="State Unemployment Rate" value={fmt(e.state_unemployment_rate, "", "%")} />
               <Stat label="Rental Vacancy Rate" value={fmt(e.rental_vacancy_rate, "", "%")} />
               <Stat label="House Price Index" value={fmt(e.housing_price_index)} />
-            </div>
-          </section>
-
-          <div className="h-px bg-border" />
-
-          <section>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Walkability (WalkScore)</h3>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-0.5">
-                <p className="text-xs text-muted-foreground">Walk Score</p>
-                {e.walk_score != null ? (
-                  <>
-                    <p className="text-sm font-medium text-foreground">
-                      {e.walk_score}<span className="text-muted-foreground font-normal">/100</span>
-                    </p>
-                    {e.walk_description && <p className="text-xs text-muted-foreground">{e.walk_description}</p>}
-                  </>
-                ) : <p className="text-sm text-muted-foreground/50">—</p>}
-              </div>
-              <Stat label="Transit Score" value={e.transit_score != null ? `${e.transit_score}/100` : null} />
-              <Stat label="Bike Score" value={e.bike_score != null ? `${e.bike_score}/100` : null} />
+              <Stat label="Fair Market Rent (2BR)" value={fmt(e.fmr_2br, "$", "/mo")} />
+              <Stat label="Fair Market Rent (1BR)" value={fmt(e.fmr_1br, "$", "/mo")} />
+              <Stat label="Fair Market Rent (Studio)" value={fmt(e.fmr_studio, "$", "/mo")} />
+              <Stat label="Nearby Multifamily Buildings" value={fmt(e.nearby_multifamily_count, "", " within 1.5km")} />
             </div>
           </section>
 
@@ -334,6 +373,8 @@ export default function LeadDetail({ lead, allLeads, onBack, onNavigate }: LeadD
             )}
           </section>
 
+          <NominatimSection enrichment={e} raw={rawData} />
+
           {e.enrichment_errors.length > 0 && (
             <>
               <div className="h-px bg-border" />
@@ -352,11 +393,24 @@ export default function LeadDetail({ lead, allLeads, onBack, onNavigate }: LeadD
         {/* ---- Outreach ---- */}
         <TabsContent value="outreach" className="space-y-6 pt-6">
           {!hasAI ? (
-            <div className="rounded-lg border border-border bg-muted/30 px-6 py-8 text-center">
-              <p className="text-sm text-muted-foreground">
-                AI output unavailable — check that{" "}
-                <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> is set and re-enrich.
-              </p>
+            <div className="rounded-lg border border-border bg-muted/30 px-6 py-10 flex flex-col items-center gap-4 text-center">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">Generate AI insights for this lead</p>
+                <p className="text-xs text-muted-foreground">
+                  Creates a personalized outreach email, score rationale, and sales talking points using Claude.
+                </p>
+              </div>
+              {aiError && (
+                <p className="text-xs text-red-600">{aiError}</p>
+              )}
+              <button
+                onClick={handleRunAI}
+                disabled={aiLoading}
+                className="flex items-center gap-2 px-5 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {aiLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                {aiLoading ? "Generating…" : "Run AI"}
+              </button>
             </div>
           ) : (
             <>
@@ -411,7 +465,14 @@ export default function LeadDetail({ lead, allLeads, onBack, onNavigate }: LeadD
 
         {/* ---- Raw Data ---- */}
         <TabsContent value="raw">
-          <RawDataTab leadId={lead.id} />
+          {rawData === null ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm">Loading raw API responses…</span>
+            </div>
+          ) : (
+            <RawDataTab raw={rawData} />
+          )}
         </TabsContent>
       </Tabs>
     </div>
