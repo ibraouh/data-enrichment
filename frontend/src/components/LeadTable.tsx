@@ -15,6 +15,7 @@ interface LeadTableProps {
   onEnrich: () => void;
   onBack: () => void;
   onRowClick?: (lead: EnrichedLead) => void;
+  hideHeader?: boolean;
 }
 
 const TIER_STYLES: Record<string, string> = {
@@ -33,6 +34,7 @@ export default function LeadTable({
   onEnrich,
   onBack,
   onRowClick,
+  hideHeader = false,
 }: LeadTableProps) {
   const [errorsExpanded, setErrorsExpanded] = useState(false);
 
@@ -43,34 +45,36 @@ export default function LeadTable({
     <div className="w-full max-w-6xl mx-auto space-y-4">
 
       {/* Summary bar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h2 className="text-base font-semibold text-foreground">
-            {isResults ? "Enrichment Results" : "Lead Preview"}
-          </h2>
-          <Badge variant="default">{leads.length} leads</Badge>
-          {isResults && (
-            <>
-              <Badge className="text-red-600 bg-red-50 border border-red-200 dark:text-red-400 dark:bg-red-950/60 dark:border-red-800">
-                {enrichedLeads!.filter((l) => l.score.tier === "HOT").length} HOT
-              </Badge>
-              <Badge className="text-amber-700 bg-amber-50 border border-amber-200 dark:text-amber-400 dark:bg-amber-950/60 dark:border-amber-800">
-                {enrichedLeads!.filter((l) => l.score.tier === "WARM").length} WARM
-              </Badge>
-              <Badge className="text-blue-600 bg-blue-50 border border-blue-200 dark:text-blue-400 dark:bg-blue-950/60 dark:border-blue-800">
-                {enrichedLeads!.filter((l) => l.score.tier === "NURTURE").length} NURTURE
-              </Badge>
-              <Badge className="text-muted-foreground bg-muted border border-border">
-                {enrichedLeads!.filter((l) => l.score.tier === "NOT_QUALIFIED").length} NOT QUALIFIED
-              </Badge>
-            </>
-          )}
-          {errors.length > 0 && (
-            <Badge variant="destructive">{errors.length} skipped</Badge>
-          )}
+      {!hideHeader && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h2 className="text-base font-semibold text-foreground">
+              {isResults ? "Enrichment Results" : "Lead Preview"}
+            </h2>
+            <Badge variant="default">{leads.length} leads</Badge>
+            {isResults && (
+              <>
+                <Badge className="text-red-600 bg-red-50 border border-red-200 dark:text-red-400 dark:bg-red-950/60 dark:border-red-800">
+                  {enrichedLeads!.filter((l) => l.score.tier === "HOT").length} HOT
+                </Badge>
+                <Badge className="text-amber-700 bg-amber-50 border border-amber-200 dark:text-amber-400 dark:bg-amber-950/60 dark:border-amber-800">
+                  {enrichedLeads!.filter((l) => l.score.tier === "WARM").length} WARM
+                </Badge>
+                <Badge className="text-blue-600 bg-blue-50 border border-blue-200 dark:text-blue-400 dark:bg-blue-950/60 dark:border-blue-800">
+                  {enrichedLeads!.filter((l) => l.score.tier === "NURTURE").length} NURTURE
+                </Badge>
+                <Badge className="text-muted-foreground bg-muted border border-border">
+                  {enrichedLeads!.filter((l) => l.score.tier === "NOT_QUALIFIED").length} NOT QUALIFIED
+                </Badge>
+              </>
+            )}
+            {errors.length > 0 && (
+              <Badge variant="destructive">{errors.length} skipped</Badge>
+            )}
+          </div>
+          <div />
         </div>
-        <div />
-      </div>
+      )}
 
       {/* Error banner */}
       {errors.length > 0 && (

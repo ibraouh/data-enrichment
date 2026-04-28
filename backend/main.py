@@ -1,23 +1,31 @@
 import asyncio
 import os
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
+import pandas as pd
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+load_dotenv()  # must run before any local module that reads env vars at import time
+
 from database import (
-    create_project, delete_project, get_enriched_leads, get_leads_for_project,
-    get_project_by_id, get_projects, get_raw_enrichment, rename_project,
-    save_ai_insights, save_enrichment_result, save_lead_score, save_leads,
-    save_raw_enrichment, update_project_status,
+    create_project, create_sheet_project, delete_project, get_enriched_leads,
+    get_leads_for_project, get_project_by_id, get_projects, get_raw_enrichment,
+    rename_project, save_ai_insights, save_enrichment_result, save_lead_score,
+    save_leads, save_raw_enrichment, update_project_status, update_sheet_last_row,
 )
 from models import (
     AIInsights, EnrichedLead, EnrichLeadsResponse, EnrichmentData, EnrichRequest,
-    GenerateOutreachRequest, OutreachEmail, ParseLeadsResponse, RawLead, ScoreBreakdown, StoredLead,
+    GenerateOutreachRequest, LinkSheetRequest, OutreachEmail, ParseLeadsResponse,
+    RawLead, ScoreBreakdown, SheetSyncResponse, StoredLead,
 )
-from utils import parse_csv_bytes, parse_csv_text, parse_excel_bytes
+from utils import parse_csv_bytes, parse_csv_text, parse_excel_bytes, parse_dataframe
+from sheets import (
+    SERVICE_ACCOUNT_EMAIL, SHEETS_ENABLED, fetch_all_sheet_data, parse_sheet_url,
+)
 from enrichment.census import enrich_census
 from enrichment.datausa import enrich_datausa
 from enrichment.nominatim import enrich_nominatim
@@ -27,8 +35,6 @@ from enrichment.fred import enrich_fred
 from enrichment.news import enrich_news
 from scoring import score as score_lead
 from outreach import generate_outreach
-
-load_dotenv()
 
 app = FastAPI(title="EliseAI Lead Enrichment API", version="0.1.0")
 
@@ -308,8 +314,116 @@ async def enrich_project_leads(
 
 
 # ---------------------------------------------------------------------------
+# Google Sheets endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/sheets/service-account-email")
+async def get_service_account_email():
+    if not SHEETS_ENABLED:
+        raise HTTPException(status_code=503, detail="Google Sheets integration is not configured.")
+    return {"email": SERVICE_ACCOUNT_EMAIL}
+
+
+@app.post("/api/sheets/link", response_model=ParseLeadsResponse)
+async def link_google_sheet(body: LinkSheetRequest):
+    if not SHEETS_ENABLED:
+        raise HTTPException(status_code=503, detail="Google Sheets integration is not configured.")
+    try:
+        spreadsheet_id = parse_sheet_url(body.sheet_url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    try:
+        all_rows, total_rows = fetch_all_sheet_data(spreadsheet_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not read Google Sheet: {exc}")
+
+    leads, errors = _validate_sheet_rows(all_rows)
+    if not leads:
+        raise HTTPException(
+            status_code=422,
+            detail="No valid leads found in the sheet. Check that your column names match the expected format.",
+        )
+
+    name = f"Sheet – {datetime.now().strftime('%b %d')}"
+    imported_at = datetime.now(timezone.utc).isoformat()
+
+    if SUPABASE_ENABLED:
+        project = await create_sheet_project(name, body.sheet_url, len(leads), total_rows)
+        project_id = project["id"]
+        lead_dicts = [l.model_dump() for l in leads]
+        stored = await save_leads(project_id, lead_dicts, imported_at=imported_at)
+        stored_leads = [StoredLead(**row) for row in stored]
+    else:
+        import uuid
+        project_id = str(uuid.uuid4())
+        stored_leads = [
+            StoredLead(**lead.model_dump(), id=str(uuid.uuid4()), project_id=project_id, imported_at=imported_at)
+            for lead in leads
+        ]
+
+    return ParseLeadsResponse(
+        project_id=project_id,
+        leads=stored_leads,
+        total=len(stored_leads),
+        errors=errors,
+    )
+
+
+@app.post("/api/projects/{project_id}/sheet-sync", response_model=SheetSyncResponse)
+async def sync_sheet_rows(project_id: str):
+    if not SUPABASE_ENABLED:
+        raise HTTPException(status_code=503, detail="Database not configured.")
+    if not SHEETS_ENABLED:
+        raise HTTPException(status_code=503, detail="Google Sheets integration is not configured.")
+
+    project = await get_project_by_id(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    if project.get("source") != "google_sheet":
+        raise HTTPException(status_code=400, detail="This project is not linked to a Google Sheet.")
+
+    sheet_url: str = project.get("sheet_url", "")
+    sheet_last_row: int = project.get("sheet_last_row", 0)
+
+    try:
+        spreadsheet_id = parse_sheet_url(sheet_url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    try:
+        all_rows, total_rows = fetch_all_sheet_data(spreadsheet_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not read Google Sheet: {exc}")
+
+    new_rows = all_rows[sheet_last_row:]
+    if not new_rows:
+        return SheetSyncResponse(project_id=project_id, new_leads=[], new_count=0, total_rows=total_rows)
+
+    leads, _ = _validate_sheet_rows(new_rows)
+    imported_at = datetime.now(timezone.utc).isoformat()
+    lead_dicts = [l.model_dump() for l in leads]
+    stored = await save_leads(project_id, lead_dicts, imported_at=imported_at)
+    await update_sheet_last_row(project_id, total_rows)
+    stored_leads = [StoredLead(**row) for row in stored]
+
+    return SheetSyncResponse(
+        project_id=project_id,
+        new_leads=stored_leads,
+        new_count=len(stored_leads),
+        total_rows=total_rows,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _validate_sheet_rows(rows: list[dict]) -> tuple[list[RawLead], list[str]]:
+    """Convert raw sheet row dicts → validated RawLeads using existing utils logic."""
+    if not rows:
+        return [], []
+    df = pd.DataFrame(rows)
+    return parse_dataframe(df)
+
 
 async def _persist_and_respond(
     leads: list[RawLead],

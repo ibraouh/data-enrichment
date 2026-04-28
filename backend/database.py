@@ -26,14 +26,46 @@ async def create_project(name: str, total_leads: int, source: str = "file") -> d
     return result.data[0]
 
 
+async def create_sheet_project(
+    name: str,
+    sheet_url: str,
+    total_leads: int,
+    initial_row_count: int,
+) -> dict:
+    db = get_client()
+    result = db.table("projects").insert({
+        "name": name,
+        "status": "pending",
+        "total_leads": total_leads,
+        "source": "google_sheet",
+        "sheet_url": sheet_url,
+        "sheet_last_row": initial_row_count,
+    }).execute()
+    return result.data[0]
+
+
+async def update_sheet_last_row(project_id: str, row_count: int) -> None:
+    db = get_client()
+    db.table("projects").update({
+        "sheet_last_row": row_count,
+        "updated_at": "now()",
+    }).eq("id", project_id).execute()
+
+
 async def rename_project(project_id: str, name: str) -> None:
     db = get_client()
     db.table("projects").update({"name": name}).eq("id", project_id).execute()
 
 
-async def save_leads(project_id: str, leads: list[dict]) -> list[dict]:
+async def save_leads(
+    project_id: str,
+    leads: list[dict],
+    imported_at: str | None = None,
+) -> list[dict]:
     db = get_client()
     rows = [{**lead, "project_id": project_id} for lead in leads]
+    if imported_at:
+        rows = [{**row, "imported_at": imported_at} for row in rows]
     result = db.table("leads").insert(rows).execute()
     return result.data
 

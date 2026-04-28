@@ -7,11 +7,13 @@
 export interface Project {
   id: string;
   name: string;
-  source: "file" | "csv" | "single";
+  source: "file" | "csv" | "single" | "google_sheet";
   status: "pending" | "enriching" | "complete" | "failed";
   total_leads: number;
   created_at: string;
   updated_at: string;
+  sheet_url?: string;
+  sheet_last_row?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -31,6 +33,7 @@ export interface RawLead {
 export interface StoredLead extends RawLead {
   id: string;
   project_id: string;
+  imported_at?: string;
 }
 
 export interface ParseLeadsResponse {
@@ -104,6 +107,13 @@ export interface EnrichLeadsResponse {
   leads: EnrichedLead[];
   total: number;
   enrichment_errors: string[];
+}
+
+export interface SheetSyncResponse {
+  project_id: string;
+  new_leads: StoredLead[];
+  new_count: number;
+  total_rows: number;
 }
 
 export interface RawEnrichmentData {

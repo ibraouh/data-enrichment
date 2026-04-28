@@ -19,6 +19,7 @@ class StoredLead(RawLead):
     """RawLead after being written to the database — includes its DB id."""
     id: str
     project_id: str
+    imported_at: Optional[str] = None
 
 
 class ParseLeadsResponse(BaseModel):
@@ -108,3 +109,14 @@ class GenerateOutreachRequest(BaseModel):
     lead: StoredLead
     enrichment: EnrichmentData
     score: ScoreBreakdown
+
+
+class LinkSheetRequest(BaseModel):
+    sheet_url: str
+
+
+class SheetSyncResponse(BaseModel):
+    project_id: str
+    new_leads: list[StoredLead]
+    new_count: int
+    total_rows: int

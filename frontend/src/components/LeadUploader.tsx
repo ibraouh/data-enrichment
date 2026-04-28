@@ -1,13 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Upload, FileText, UserPlus, Loader2, AlertCircle, ArrowRight } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Upload, FileText, UserPlus, Sheet, Loader2, AlertCircle, ArrowRight, Copy, Check } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { parseLeadsFromCSV, parseLeadsFromFile, parseLeadsSingle } from "@/lib/api";
+import { getServiceAccountEmail, linkGoogleSheet, parseLeadsFromCSV, parseLeadsFromFile, parseLeadsSingle } from "@/lib/api";
 import type { ParseLeadsResponse, RawLead } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -228,6 +228,111 @@ function SingleLeadTab({ onSuccess }: LeadUploaderProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Google Sheet Tab
+// ---------------------------------------------------------------------------
+
+function GoogleSheetTab({ onSuccess }: LeadUploaderProps) {
+  const [url, setUrl] = useState("");
+  const [serviceEmail, setServiceEmail] = useState<string | null>(null);
+  const [emailLoading, setEmailLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getServiceAccountEmail()
+      .then((r) => setServiceEmail(r.email))
+      .catch(() => setServiceEmail(null))
+      .finally(() => setEmailLoading(false));
+  }, []);
+
+  async function copyEmail() {
+    if (!serviceEmail) return;
+    await navigator.clipboard.writeText(serviceEmail);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleSubmit() {
+    if (!url.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await linkGoogleSheet(url.trim());
+      if (result.total === 0) {
+        setError("No valid leads found in the sheet. Check that column names match the expected format.");
+        return;
+      }
+      onSuccess(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to link sheet.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Instruction card */}
+      <div className="rounded-xl border border-border bg-muted/40 p-4 space-y-3">
+        <p className="text-xs font-semibold text-foreground">Before linking, share your sheet:</p>
+        <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+          <li>Open your Google Sheet and click <span className="font-medium text-foreground">Share</span> (top right)</li>
+          <li>Add the address below with <span className="font-medium text-foreground">Viewer</span> access</li>
+          <li>Paste your sheet URL below and click <span className="font-medium text-foreground">Link Sheet</span></li>
+        </ol>
+        <div className="flex items-center gap-2">
+          {emailLoading ? (
+            <div className="flex-1 h-8 rounded-lg bg-muted animate-pulse" />
+          ) : serviceEmail ? (
+            <>
+              <code className="flex-1 text-xs font-mono bg-background border border-border rounded-lg px-3 py-1.5 truncate select-all">
+                {serviceEmail}
+              </code>
+              <button
+                onClick={copyEmail}
+                className="shrink-0 p-1.5 rounded-lg border border-border bg-background hover:bg-muted transition-colors"
+                title="Copy email"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
+              </button>
+            </>
+          ) : (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 w-full">
+              Google Sheets not configured — set GOOGLE_SERVICE_ACCOUNT_JSON in .env
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* URL input */}
+      <div className="space-y-1.5">
+        <Label htmlFor="sheet-url">Google Sheet URL</Label>
+        <Input
+          id="sheet-url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://docs.google.com/spreadsheets/d/..."
+          disabled={!serviceEmail}
+        />
+      </div>
+
+      {error && <ErrorBanner message={error} />}
+
+      <Button
+        onClick={handleSubmit}
+        disabled={!url.trim() || !serviceEmail || loading}
+        className="w-full font-semibold"
+      >
+        {loading
+          ? <><Loader2 className="w-4 h-4 animate-spin" /> Linking…</>
+          : <>Link Sheet <ArrowRight className="w-4 h-4" /></>}
+      </Button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Shared error banner
 // ---------------------------------------------------------------------------
 
@@ -258,6 +363,9 @@ export default function LeadUploader({ onSuccess }: LeadUploaderProps) {
           <TabsTrigger value="single" className="flex items-center gap-1.5 flex-1">
             <UserPlus className="w-3.5 h-3.5" /> Add Single
           </TabsTrigger>
+          <TabsTrigger value="sheet" className="flex items-center gap-1.5 flex-1">
+            <Sheet className="w-3.5 h-3.5" /> Google Sheet
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="file">
@@ -268,6 +376,9 @@ export default function LeadUploader({ onSuccess }: LeadUploaderProps) {
         </TabsContent>
         <TabsContent value="single">
           <SingleLeadTab onSuccess={onSuccess} />
+        </TabsContent>
+        <TabsContent value="sheet">
+          <GoogleSheetTab onSuccess={onSuccess} />
         </TabsContent>
       </Tabs>
     </div>

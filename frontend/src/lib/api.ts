@@ -1,4 +1,4 @@
-import type { AIInsights, EnrichedLead, EnrichLeadsResponse, ParseLeadsResponse, Project, RawEnrichmentData, RawLead, StoredLead } from "./types";
+import type { AIInsights, EnrichedLead, EnrichLeadsResponse, ParseLeadsResponse, Project, RawEnrichmentData, RawLead, SheetSyncResponse, StoredLead } from "./types";
 
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
@@ -121,6 +121,31 @@ export async function getRawEnrichment(leadId: string): Promise<RawEnrichmentDat
 
 export async function getEnrichedLeads(projectId: string): Promise<EnrichLeadsResponse> {
   const res = await fetch(`${API_URL}/api/projects/${projectId}/enriched-leads`);
+  return handleResponse(res);
+}
+
+// ---------------------------------------------------------------------------
+// Google Sheets
+// ---------------------------------------------------------------------------
+
+export async function getServiceAccountEmail(): Promise<{ email: string }> {
+  const res = await fetch(`${API_URL}/api/sheets/service-account-email`);
+  return handleResponse(res);
+}
+
+export async function linkGoogleSheet(sheetUrl: string): Promise<ParseLeadsResponse> {
+  const res = await fetch(`${API_URL}/api/sheets/link`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sheet_url: sheetUrl }),
+  });
+  return handleResponse(res);
+}
+
+export async function syncSheetRows(projectId: string): Promise<SheetSyncResponse> {
+  const res = await fetch(`${API_URL}/api/projects/${projectId}/sheet-sync`, {
+    method: "POST",
+  });
   return handleResponse(res);
 }
 
