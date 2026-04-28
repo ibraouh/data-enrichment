@@ -14,6 +14,7 @@ A full-stack lead enrichment tool built as an EliseAI interview take-home. It in
 
 **Frontend:** Next.js 15 App Router, React, TypeScript, shadcn/ui, Tailwind CSS, Plus Jakarta Sans.
 **Backend:** Python 3.11, FastAPI, httpx (async HTTP), pandas + openpyxl (file parsing).
+**Database:** Supabase (Postgres) via `supabase-py`. Every upload creates a project row; leads, enrichment results, scores, and AI insights are persisted in separate tables. The app degrades gracefully when `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` are unset — it returns placeholder UUIDs and skips DB writes.
 **AI:** Anthropic Claude API — used for personalized outreach email drafts and lead scoring rationale.
 **Local dev only for now.** No deployment yet; Vercel (frontend) + separate Python host is the plan.
 
@@ -37,10 +38,13 @@ cd frontend && npm run dev
 
 ### Python Backend
 - Use `async def` + `httpx.AsyncClient` for all external API calls — enrich leads in parallel with `asyncio.gather`.
-- All enrichment modules live in `backend/enrichment/`. Each exports a single async function: `async def enrich_*(lead: RawLead, client: httpx.AsyncClient) -> dict`.
+- Enrichment runs in two phases per lead: **Nominatim first** (geocoding — lat/lon and county feed later modules), then all remaining modules in parallel.
+- All enrichment modules live in `backend/enrichment/`. Each exports a single async function: `async def enrich_*(lead: RawLead, ..., client: httpx.AsyncClient) -> dict`. Modules may return a `_raw` key with the full API response for debug storage.
 - Enrichment failures are caught and return empty dicts — never crash the whole request because one API is down.
 - Scoring logic is purely deterministic Python in `scoring.py` — no AI needed for the score number itself.
 - Claude API is only called in `outreach.py` for email generation and scoring rationale text.
+- Database helpers all live in `database.py`. Import from there; never call Supabase directly in `main.py`.
+- Google Sheets logic lives in `sheets.py`. `SHEETS_ENABLED` is `True` only when `GOOGLE_SERVICE_ACCOUNT_JSON` resolves to valid credentials.
 - Use `python-dotenv` to load `.env`. Never hardcode API keys.
 - Pydantic models in `models.py` are the source of truth for request/response shapes.
 
@@ -48,8 +52,10 @@ cd frontend && npm run dev
 - Types in `src/lib/types.ts` must stay in sync with Pydantic models in `backend/models.py`.
 - API calls go through `src/lib/api.ts` — no raw `fetch` in components.
 - Use shadcn/ui components from `src/components/ui/`. Add new ones via `npx shadcn@latest add <component>`.
-- Three-step UI flow: **Upload → Processing → Results**. Manage with a `step` state enum in `page.tsx`.
-- Keep components focused: `LeadUploader` handles input only, `LeadTable` handles display only, `LeadDetailModal` handles the drill-down.
+- Two-route structure: `page.tsx` is the home/upload page; `projects/[id]/page.tsx` is the per-project view (enrich, results, sheet sync).
+- Keep components focused: `LeadUploader` handles input only, `LeadTable` handles display only, `LeadDetail` handles the drill-down, `ProjectSidebar` handles history navigation.
+- `src/lib/ai-cache.ts` caches generated AI insights locally so navigating away and back doesn't re-generate them.
+- `src/lib/supabase.ts` initializes the Supabase browser client using `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
 ### Design System
 
@@ -116,14 +122,16 @@ cd frontend && npm run dev
 
 | Module | API | Key Env Var | What We Extract |
 |---|---|---|---|
+| `nominatim.py` | OpenStreetMap Nominatim | none (free) | latitude, longitude, suburb, quarter, postcode, county |
 | `census.py` | U.S. Census ACS5 | none (free) | median income, renter %, total population by city |
-| `datausa.py` | DataUSA | none (free) | metro-level wages, poverty rate, employment |
-| `walkscore.py` | WalkScore | `WALKSCORE_API_KEY` | walk_score, transit_score, bike_score |
-| `fred.py` | FRED | `FRED_API_KEY` | state unemployment rate, housing price index |
+| `datausa.py` | DataUSA | none (free) | metro-level wages, poverty rate |
+| `hud_fmr.py` | HUD Fair Market Rents | `HUD_API_KEY` | studio, 1BR, 2BR fair market rents by county |
+| `overpass.py` | Overpass API (OpenStreetMap) | none (free) | count of nearby multifamily buildings within 2 km |
+| `fred.py` | FRED | `FRED_API_KEY` | state unemployment rate, rental vacancy rate, housing price index |
 | `news.py` | NewsAPI | `NEWS_API_KEY` | recent company news headlines + sentiment |
 | `outreach.py` | Anthropic Claude | `ANTHROPIC_API_KEY` | email subject + body, scoring rationale, key insights |
 
-All enrichment runs in parallel per lead. Each module handles its own errors silently.
+Enrichment runs in two phases: Nominatim first (coordinates + county route later modules), then all remaining modules in parallel. Each module handles its own errors silently.
 
 ---
 
@@ -131,15 +139,15 @@ All enrichment runs in parallel per lead. Each module handles its own errors sil
 
 Documented in `backend/scoring.py`. Score is 0–100, computed from:
 
-| Component | Weight | Key inputs |
+| Component | Max pts | Key inputs |
 |---|---|---|
-| Demographics | 30 pts | Median income (>$60k scores higher), renter % (>50% scores higher), population |
-| Market health | 25 pts | Low unemployment (<5%), economic growth signals from DataUSA |
-| Walkability | 20 pts | WalkScore >70 = full points; <30 = near zero |
-| Company news | 15 pts | Positive sentiment in recent headlines; no news = neutral |
-| Geographic market | 10 pts | Major metro bonus list (NYC, LA, Chicago, Houston, Phoenix, etc.) |
+| Demographics | 35 | Median income (Census), renter % (Census), total population |
+| Market health | 35 | State unemployment (FRED), rental vacancy (FRED), poverty rate (DataUSA), HUD 2BR FMR, nearby multifamily count (Overpass) |
+| Company news | 20 | Positive sentiment = 20 pts, negative = 3, neutral/none = 10 |
+| Geographic market | 10 | Major metro bonus list (NYC, LA, Chicago, Houston, Phoenix, etc.) |
+| Walkability | 0 | **Disabled** — WalkScore requires a paid API key |
 
-**Why these signals?** EliseAI's product is most valuable to property managers in competitive, urban/suburban rental markets with high unit turnover. High-income, high-renter-percentage metros have the most leasing traffic and the strongest ROI case for AI automation.
+**Why these signals?** EliseAI's product is most valuable to property managers in competitive, urban/suburban rental markets with high unit turnover. High-income, high-renter-percentage metros with dense multifamily stock and low vacancy have the most leasing traffic and the strongest ROI case for AI automation.
 
 ---
 
@@ -168,7 +176,7 @@ Use this for demos and development testing.
 
 ## Future Work (Not Implemented Yet)
 
-- **Google Sheets polling**: Poll a linked sheet every 60s, diff against last-seen row count, enrich new rows automatically. Will use `google-api-python-client`.
 - **Vercel deployment**: Frontend to Vercel. Python backend to Railway or Fly.io. Update `NEXT_PUBLIC_API_URL` env var.
 - **Auto-send outreach**: Currently copy-paste only. Future: SendGrid/Resend integration behind a "Send" button with rep confirmation.
 - **CRM sync**: HubSpot or Salesforce API write-back after enrichment.
+- **Google Sheets auto-poll**: Currently requires manual "Sync New Rows" click. Future: background polling every 60s.
