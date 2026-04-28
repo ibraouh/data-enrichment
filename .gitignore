@@ -21,6 +21,9 @@ venv/
 .env.*
 !.env.example
 
+# Google service account keys — never commit
+backend/service-account.json
+
 # Next.js
 .next/
 out/
